@@ -1,4 +1,5 @@
 import "./config/loadEnv.js";
+import "./infra/outboundDebug.js";
 
 import connectDB from "./config/db.js";
 import depositPipelineConfig from "./config/depositPipelineConfig.js";

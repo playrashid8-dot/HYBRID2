@@ -3,6 +3,7 @@
  * Run a single replica in production. API traffic should use NOVA_SERVICE=api replicas.
  */
 import "./config/loadEnv.js";
+import "./infra/outboundDebug.js";
 
 import express from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";

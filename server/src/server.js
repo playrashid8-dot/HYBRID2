@@ -1,4 +1,5 @@
 import "./config/loadEnv.js";
+import "./infra/outboundDebug.js";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -501,12 +502,19 @@ async function startBackgroundServices() {
     logger.error("Redis connect (API warm path)", { error: err?.message || String(err) });
   }
 
-  try {
-    await startRealtimeListener();
-  } catch (err) {
-    logger.error("Realtime listener bootstrap failed", {
-      error: err?.message || String(err),
-    });
+  if (novaService === "api") {
+    logger.warn(
+      "Realtime listener skipped on API-only replica — dedicated hybrid service owns websocket subscriptions",
+      { NOVA_SERVICE: novaService },
+    );
+  } else {
+    try {
+      await startRealtimeListener();
+    } catch (err) {
+      logger.error("Realtime listener bootstrap failed", {
+        error: err?.message || String(err),
+      });
+    }
   }
 
   if (hybridStackEnabled) {
@@ -527,7 +535,7 @@ async function startBackgroundServices() {
     }
   }
 
-  if (isHybridEarnEnabled()) {
+  if (isHybridEarnEnabled() && hybridStackEnabled) {
     try {
       startHybridEngine();
     } catch (err) {
@@ -535,6 +543,11 @@ async function startBackgroundServices() {
         error: err?.message || String(err),
       });
     }
+  } else if (isHybridEarnEnabled() && novaService === "api") {
+    logger.warn(
+      "Hybrid engine schedules skipped on API-only replica — dedicated hybrid service owns background jobs",
+      { NOVA_SERVICE: novaService },
+    );
   }
 
   if (
