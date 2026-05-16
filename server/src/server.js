@@ -64,6 +64,7 @@ const missingRequiredEnv = REQUIRED_ENV_VARS.filter(
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+let appReady = false;
 
 const isProd =
   process.env.NODE_ENV === "production" ||
@@ -147,7 +148,25 @@ app.get("/api", (req, res) => {
 });
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true });
+  if (!appReady) {
+    return res.status(503).json({
+      success: false,
+      msg: "Application booting",
+      data: {
+        ready: false,
+      },
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    msg: "API healthy",
+    data: {
+      ready: true,
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    },
+  });
 });
 
 app.use("/system/health", healthLimiter);
@@ -446,7 +465,13 @@ async function startServer() {
     logger.error("HTTP listener error", { error: err?.message || String(err) });
   });
 
-  void bootstrapRuntime();
+  bootstrapRuntime().catch((err) => {
+    logger.error("Fatal bootstrap failure", {
+      error: err?.stack || err?.message || String(err),
+    });
+
+    process.exit(1);
+  });
 }
 
 await startServer();
@@ -455,16 +480,17 @@ async function bootstrapRuntime() {
   try {
     await connectDB();
     await validateBootRequirements();
-    logger.info("Boot validation completed", {
-      NOVA_SERVICE: novaService,
-      hybridStackEnabled,
-    });
 
     await startBackgroundServices();
+    appReady = true;
+
+    logger.info("Application ready");
   } catch (err) {
-    logger.error("Boot error:", {
+    logger.error("Boot error", {
       error: err?.stack || err?.message || String(err),
     });
+
+    throw err;
   }
 }
 
