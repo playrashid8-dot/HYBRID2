@@ -7,4 +7,5 @@ node_modules
 dist
 .next
 .vercel
+.cursor/*.log
 .env*.local
