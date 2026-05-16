@@ -62,13 +62,6 @@ const missingRequiredEnv = REQUIRED_ENV_VARS.filter(
   (key) => !String(process.env[key] || "").trim()
 );
 
-if (missingRequiredEnv.length > 0) {
-  logger.error("Missing required env var(s) — exiting", {
-    keys: missingRequiredEnv.join(","),
-  });
-  process.exit(1);
-}
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -153,13 +146,8 @@ app.get("/api", (req, res) => {
   });
 });
 
-app.use("/api/health", healthLimiter);
 app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    msg: "Health check ok",
-    data: { status: "ok" },
-  });
+  res.json({ ok: true });
 });
 
 app.use("/system/health", healthLimiter);
@@ -331,6 +319,10 @@ registerShutdownHook("http_listener", async () => {
 });
 
 async function validateBootRequirements() {
+  if (missingRequiredEnv.length > 0) {
+    throw new Error(`Missing required env var(s): ${missingRequiredEnv.join(",")}`);
+  }
+
   const mongoPingOk = await pingMongoDeadline(
     Number(process.env.MONGO_PING_DEADLINE_MS || 8000),
   );
@@ -437,16 +429,6 @@ async function validateBootRequirements() {
 }
 
 async function startServer() {
-  await connectDB();
-  try {
-    await validateBootRequirements();
-  } catch (err) {
-    logger.error("Boot validation failed — refusing to bind listener", {
-      error: err?.message || String(err),
-    });
-    process.exit(1);
-  }
-
   server = app.listen(PORT, () => {
     logger.info(`HTTP API listening on ${PORT}`, {
       NOVA_SERVICE: novaService,
@@ -460,14 +442,31 @@ async function startServer() {
     }
   });
 
-  void startBackgroundServices();
-
   server.on("error", (err) => {
     logger.error("HTTP listener error", { error: err?.message || String(err) });
   });
+
+  void bootstrapRuntime();
 }
 
 await startServer();
+
+async function bootstrapRuntime() {
+  try {
+    await connectDB();
+    await validateBootRequirements();
+    logger.info("Boot validation completed", {
+      NOVA_SERVICE: novaService,
+      hybridStackEnabled,
+    });
+
+    await startBackgroundServices();
+  } catch (err) {
+    logger.error("Boot error:", {
+      error: err?.stack || err?.message || String(err),
+    });
+  }
+}
 
 async function startBackgroundServices() {
   try {

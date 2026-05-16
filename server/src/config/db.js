@@ -21,15 +21,12 @@ const connectDB = async () => {
     process.env.MONGO_URI = uri;
   }
   if (!uri) {
-    logger.error("MONGO_URI missing — exiting");
-    process.exit(1);
+    throw new Error("MONGO_URI missing");
   }
   if (!isLikelyMongoUri(uri)) {
-    logger.error(
-      "MONGO_URI must be a mongodb:// or mongodb+srv:// connection string — check Railway variables for stray quotes or whitespace",
-      {},
+    throw new Error(
+      "MONGO_URI must be a mongodb:// or mongodb+srv:// connection string — check Railway variables for stray quotes or whitespace"
     );
-    process.exit(1);
   }
 
   const ready = mongoose.connection.readyState;
@@ -77,10 +74,10 @@ const connectDB = async () => {
 
     return conn;
   } catch (error) {
-    logger.error("MongoDB connection failed — exiting", {
+    logger.error("MongoDB connection failed", {
       error: error?.message || String(error),
     });
-    process.exit(1);
+    throw error;
   }
 };
 
